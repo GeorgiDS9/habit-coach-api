@@ -29,3 +29,18 @@ export function signAccessToken(userId: string): string {
     expiresIn: "15m",
   });
 }
+
+type AccessTokenPayload = {
+  sub: string;
+};
+
+export function verifyAccessToken(token: string): AccessTokenPayload {
+  const secret = getJwtSecret();
+  const decoded = jwt.verify(token, secret);
+
+  if (typeof decoded !== "object" || decoded === null || !("sub" in decoded)) {
+    throw new Error("Invalid token payload");
+  }
+
+  return decoded as AccessTokenPayload;
+}
