@@ -1,6 +1,20 @@
 import { hashPassword, signAccessToken, verifyPassword } from "../lib/auth.js";
 import type { Context, LoginArgs, SignupArgs } from "./types.js";
 
+type CreateHabitArgs = {
+  input: {
+    title: string;
+    description?: string | null;
+  };
+};
+
+type ToggleHabitActiveArgs = {
+  input: {
+    habitId: string;
+    isActive: boolean;
+  };
+};
+
 export const resolvers = {
   Query: {
     ping: () => "pong",
@@ -55,6 +69,55 @@ export const resolvers = {
       }
 
       return { accessToken: signAccessToken(user.id) };
+    },
+
+    createHabit: async (
+      _parent: unknown,
+      args: CreateHabitArgs,
+      ctx: Context,
+    ) => {
+      if (!ctx.userId) {
+        throw new Error("UNAUTHENTICATED");
+      }
+
+      const title = args.input.title.trim();
+      if (!title) {
+        throw new Error("Title is required");
+      }
+
+      return ctx.prisma.habit.create({
+        data: {
+          userId: ctx.userId,
+          title,
+          description: args.input.description ?? null,
+        },
+      });
+    },
+
+    toggleHabitActive: async (
+      _parent: unknown,
+      args: ToggleHabitActiveArgs,
+      ctx: Context,
+    ) => {
+      if (!ctx.userId) {
+        throw new Error("UNAUTHENTICATED");
+      }
+
+      const habit = await ctx.prisma.habit.findFirst({
+        where: {
+          id: args.input.habitId,
+          userId: ctx.userId,
+        },
+      });
+
+      if (!habit) {
+        throw new Error("Habit not found");
+      }
+
+      return ctx.prisma.habit.update({
+        where: { id: habit.id },
+        data: { isActive: args.input.isActive },
+      });
     },
   },
 };

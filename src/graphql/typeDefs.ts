@@ -26,7 +26,19 @@ export const typeDefs = `#graphql
   }
 
   type Mutation {
-    signup(input: SignupInput!): AuthPayload!
-    login(input: LoginInput!): AuthPayload!
-  }
+  signup(input: SignupInput!): AuthPayload!
+  login(input: LoginInput!): AuthPayload!
+  createHabit(input: CreateHabitInput!): Habit!
+  toggleHabitActive(input: ToggleHabitActiveInput!): Habit!
+}
+
+input CreateHabitInput {
+  title: String!
+  description: String
+}
+
+input ToggleHabitActiveInput {
+  habitId: ID!
+  isActive: Boolean!
+}
 `;
