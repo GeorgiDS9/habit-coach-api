@@ -5,7 +5,12 @@ export const resolvers = {
   Query: {
     ping: () => "pong",
     habits: async (_parent: unknown, _args: unknown, ctx: Context) => {
+      if (!ctx.userId) {
+        throw new Error("UNAUTHENTICATED");
+      }
+
       return ctx.prisma.habit.findMany({
+        where: { userId: ctx.userId },
         orderBy: { createdAt: "desc" },
       });
     },

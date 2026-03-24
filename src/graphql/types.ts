@@ -2,6 +2,7 @@ import { prisma } from "../lib/prisma.js";
 
 export type Context = {
   prisma: typeof prisma;
+  userId: string | null;
 };
 
 export type SignupArgs = {
