@@ -17,4 +17,6 @@ Schema / operation changes here should be reflected in **`habit-coach-web`** (op
 
 ## Git
 
-Branches (`feat/…`, `fix/…`, `chore/…`); meaningful commits; **push**, then **merge into `main`** (no PR workflow). **Cross-repo:** merge API and web in a sensible order; note the dependency in a commit message if helpful. Details: [PROJECT_PLAN.md](./PROJECT_PLAN.md) (Git section).
+Do NOT add `Co-Authored-By` trailers to commit messages.
+
+**Default:** branches (`feat/…`, `fix/…`, `chore/…`), several meaningful commits (do separation of concerns, do not bundle up all changes into just 1 or 2 commits); **push**, then **merge into `main`** (no PR workflow). **Cross-repo:** merge API and web in a sensible order; note the dependency in a commit message if helpful. Details: [PROJECT_PLAN.md](./PROJECT_PLAN.md) (Git section).
