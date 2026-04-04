@@ -117,10 +117,11 @@
 - **habit-coach-api:** `prisma migrate`, GraphQL schema ↔ tests, deploy env on host.
 - **habit-coach-web:** `npm run build`, Apollo operations ↔ UI, Vercel env vars.
 
-## Git (both repos)
+## Git (both FE and BE repos)
 
-- Feature branches (`feat/…`); meaningful commits; push branch; PR → merge to `main`.
-- Cross-repo features: two PRs or sequential commits with linked descriptions.
+- **Default:** work on branches (`feat/…`, `fix/…`, `chore/…`); meaningful commits; **push the branch**, then **merge into `main`** (e.g. `git checkout main && git merge <branch>`—**no pull-request workflow**).
+- **Exception:** trivial doc-only fixes may go straight to `main`.
+- **Cross-repo features:** merge related work in each repo in a sensible order; note the dependency in the merge commit message (or a short note) so the pair isn’t lost.
 
 ---
 
