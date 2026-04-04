@@ -46,7 +46,7 @@ jobs:
         run: npx prisma generate
 
       - name: Apply database schema
-        run: npx prisma db push --skip-generate
+        run: npx prisma db push
 
       - name: Lint
         run: npm run lint
