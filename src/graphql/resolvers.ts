@@ -183,6 +183,13 @@ export const resolvers = {
       const userId = requireAuth(ctx);
       const date = parseUTCDate(args.input.date);
 
+      // Reject future dates — check-ins must be for today or the past.
+      if (args.input.date > getTodayUTC()) {
+        throw new GraphQLError("Cannot log a check-in for a future date.", {
+          extensions: { code: ErrorCodes.BAD_USER_INPUT },
+        });
+      }
+
       // Verify ownership — avoid leaking whether habit exists for other users.
       const habit = await ctx.prisma.habit.findFirst({
         where: { id: args.input.habitId, userId },
