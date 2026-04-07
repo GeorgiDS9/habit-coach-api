@@ -9,6 +9,14 @@
 1. **[CODE_LAYOUT.md](./CODE_LAYOUT.md)** — resolver vs domain vs `lib/` boundaries.
 2. **[PROJECT_PLAN.md](./PROJECT_PLAN.md)** — full-stack phases, stacks, delivery order (source of truth for product scope).
 
+## Operational safety (read before tests)
+
+- See **[RUNBOOK.md](./RUNBOOK.md)** for environment/test safety and merge checklist.
+- Keep DBs separated:
+  - `DATABASE_URL` = dev app DB
+  - `TEST_DATABASE_URL` = isolated test DB
+- Never run tests when
+
 ## Contract
 
 Schema / operation changes here should be reflected in **`habit-coach-web`** (operations, codegen, UI) unless the task is explicitly backend-only.
@@ -25,6 +33,7 @@ npm run typecheck # tsc --noEmit
 ```
 
 **Test hygiene rules:**
+
 - Never hardcode dates in tests (e.g. `"2026-04-04"`). Use `new Date().toISOString().slice(0, 10)` for "today", or a fixed date far enough in the past that streak/range logic cannot be affected by it. Hardcoded dates rot silently and only fail in CI weeks later.
 
 ## Git
