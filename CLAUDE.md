@@ -15,8 +15,20 @@ Schema / operation changes here should be reflected in **`habit-coach-web`** (op
 
 **Related repo:** [habit-coach-web](https://github.com/GeorgiDS9/habit-coach-web)
 
+## Testing
+
+Run before every push or merge — CI must not be the first to catch failures.
+
+```bash
+npm test          # vitest against real Postgres (requires DB running)
+npm run typecheck # tsc --noEmit
+```
+
+**Test hygiene rules:**
+- Never hardcode dates in tests (e.g. `"2026-04-04"`). Use `new Date().toISOString().slice(0, 10)` for "today", or a fixed date far enough in the past that streak/range logic cannot be affected by it. Hardcoded dates rot silently and only fail in CI weeks later.
+
 ## Git
 
 Do NOT add `Co-Authored-By` trailers to commit messages.
 
-**Default:** branches (`feat/…`, `fix/…`, `chore/…`), several meaningful commits (do separation of concerns, do not bundle up all changes into just 1 or 2 commits); **push**, then **merge into `main`** (no PR workflow). **Cross-repo:** merge API and web in a sensible order; note the dependency in a commit message if helpful. Details: [PROJECT_PLAN.md](./PROJECT_PLAN.md) (Git section).
+**Default:** branches (`feat/…`, `fix/…`, `chore/…`), several meaningful commits (do separation of concerns, do not bundle up all changes into just 1 or 2 commits); **push**, then **merge into `main`** (no PR workflow — just `git checkout main && git merge <branch>`). **Cross-repo:** merge API and web in a sensible order; note the dependency in a commit message if helpful. Details: [PROJECT_PLAN.md](./PROJECT_PLAN.md) (Git section).
