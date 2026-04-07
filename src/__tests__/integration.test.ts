@@ -439,7 +439,7 @@ describe("habitLogs query", () => {
 describe("Streak and weeklyStats", () => {
   let userId: string;
   let habitId: string;
-  const today = "2026-04-04";
+  const today = new Date().toISOString().slice(0, 10); // real UTC date so resolver's getTodayUTC() matches
 
   beforeEach(async () => {
     const user = await db.user.create({
