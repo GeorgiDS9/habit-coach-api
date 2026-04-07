@@ -258,6 +258,14 @@ describe("Habits", () => {
 describe("Check-ins", () => {
   let userId: string;
   let habitId: string;
+  // Use a stable past date — far enough back that it can never become "today"
+  const pastDate = "2020-01-15";
+  const today = new Date().toISOString().slice(0, 10);
+  const tomorrow = (() => {
+    const d = new Date();
+    d.setUTCDate(d.getUTCDate() + 1);
+    return d.toISOString().slice(0, 10);
+  })();
 
   beforeEach(async () => {
     const user = await db.user.create({
@@ -273,7 +281,7 @@ describe("Check-ins", () => {
     habitId = res.data!.createHabit.id;
   });
 
-  it("logCheckIn creates a log entry", async () => {
+  it("logCheckIn creates a log entry for a past date", async () => {
     const res = await gql<{
       logCheckIn: {
         id: string;
@@ -282,29 +290,49 @@ describe("Check-ins", () => {
         completed: boolean;
         note: string | null;
       };
-    }>(LOG_CHECK_IN, { input: { habitId, date: "2026-04-04" } }, userId);
+    }>(LOG_CHECK_IN, { input: { habitId, date: pastDate } }, userId);
 
     expect(res.errors).toBeUndefined();
     expect(res.data?.logCheckIn.habitId).toBe(habitId);
-    expect(res.data?.logCheckIn.date).toBe("2026-04-04");
+    expect(res.data?.logCheckIn.date).toBe(pastDate);
     expect(res.data?.logCheckIn.completed).toBe(true);
     expect(res.data?.logCheckIn.note).toBeNull();
+  });
+
+  it("logCheckIn creates a log entry for today", async () => {
+    const res = await gql<{ logCheckIn: { date: string } }>(
+      LOG_CHECK_IN,
+      { input: { habitId, date: today } },
+      userId,
+    );
+    expect(res.errors).toBeUndefined();
+    expect(res.data?.logCheckIn.date).toBe(today);
+  });
+
+  it("logCheckIn rejects a future date", async () => {
+    const res = await gql(
+      LOG_CHECK_IN,
+      { input: { habitId, date: tomorrow } },
+      userId,
+    );
+    expect(res.errors?.[0]?.extensions?.code).toBe("BAD_USER_INPUT");
+    expect(res.errors?.[0]?.message).toMatch(/future/i);
   });
 
   it("logCheckIn stores a note", async () => {
     const res = await gql<{ logCheckIn: { note: string | null } }>(
       LOG_CHECK_IN,
-      { input: { habitId, date: "2026-04-04", note: "Felt great" } },
+      { input: { habitId, date: pastDate, note: "Felt great" } },
       userId,
     );
     expect(res.data?.logCheckIn.note).toBe("Felt great");
   });
 
   it("logCheckIn is idempotent (upsert)", async () => {
-    await gql(LOG_CHECK_IN, { input: { habitId, date: "2026-04-04" } }, userId);
+    await gql(LOG_CHECK_IN, { input: { habitId, date: pastDate } }, userId);
     const res = await gql<{ logCheckIn: { id: string } }>(
       LOG_CHECK_IN,
-      { input: { habitId, date: "2026-04-04", note: "Updated" } },
+      { input: { habitId, date: pastDate, note: "Updated" } },
       userId,
     );
     expect(res.errors).toBeUndefined();
@@ -316,7 +344,7 @@ describe("Check-ins", () => {
 
   it("logCheckIn requires authentication", async () => {
     const res = await gql(LOG_CHECK_IN, {
-      input: { habitId, date: "2026-04-04" },
+      input: { habitId, date: pastDate },
     });
     expect(res.errors?.[0]?.extensions?.code).toBe("UNAUTHENTICATED");
   });
@@ -327,18 +355,18 @@ describe("Check-ins", () => {
     });
     const res = await gql(
       LOG_CHECK_IN,
-      { input: { habitId, date: "2026-04-04" } },
+      { input: { habitId, date: pastDate } },
       other.id,
     );
     expect(res.errors?.[0]?.extensions?.code).toBe("NOT_FOUND");
   });
 
   it("removeCheckIn deletes the log and returns true", async () => {
-    await gql(LOG_CHECK_IN, { input: { habitId, date: "2026-04-04" } }, userId);
+    await gql(LOG_CHECK_IN, { input: { habitId, date: pastDate } }, userId);
 
     const res = await gql<{ removeCheckIn: boolean }>(
       REMOVE_CHECK_IN,
-      { input: { habitId, date: "2026-04-04" } },
+      { input: { habitId, date: pastDate } },
       userId,
     );
     expect(res.errors).toBeUndefined();
@@ -351,7 +379,7 @@ describe("Check-ins", () => {
   it("removeCheckIn returns false when no log exists", async () => {
     const res = await gql<{ removeCheckIn: boolean }>(
       REMOVE_CHECK_IN,
-      { input: { habitId, date: "2026-04-04" } },
+      { input: { habitId, date: pastDate } },
       userId,
     );
     expect(res.data?.removeCheckIn).toBe(false);
@@ -363,7 +391,7 @@ describe("Check-ins", () => {
     });
     const res = await gql(
       REMOVE_CHECK_IN,
-      { input: { habitId, date: "2026-04-04" } },
+      { input: { habitId, date: pastDate } },
       other.id,
     );
     expect(res.errors?.[0]?.extensions?.code).toBe("NOT_FOUND");
