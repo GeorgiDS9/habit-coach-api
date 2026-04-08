@@ -189,17 +189,17 @@ describe("Auth", () => {
       input: { email: "alice@example.com", password: "password123" },
     });
     const res = await gql(SIGNUP, {
-      input: { email: "alice@example.com", password: "other" },
+      input: { email: "alice@example.com", password: "other1234" },
     });
     expect(res.errors?.[0]?.extensions?.code).toBe("BAD_USER_INPUT");
   });
 
   it("login returns accessToken with correct credentials", async () => {
     await gql(SIGNUP, {
-      input: { email: "bob@example.com", password: "secret" },
+      input: { email: "bob@example.com", password: "secret12" },
     });
     const res = await gql<{ login: { accessToken: string; refreshToken: string } }>(LOGIN, {
-      input: { email: "bob@example.com", password: "secret" },
+      input: { email: "bob@example.com", password: "secret12" },
     });
     expect(res.errors).toBeUndefined();
     expect(typeof res.data?.login.accessToken).toBe("string");
@@ -208,7 +208,7 @@ describe("Auth", () => {
 
   it("login rejects wrong password", async () => {
     await gql(SIGNUP, {
-      input: { email: "carol@example.com", password: "correct" },
+      input: { email: "carol@example.com", password: "correct1" },
     });
     const res = await gql(LOGIN, {
       input: { email: "carol@example.com", password: "wrong" },
