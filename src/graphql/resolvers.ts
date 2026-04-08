@@ -1,7 +1,21 @@
 import { GraphQLError } from "graphql";
 import { ErrorCodes } from "../config/errorCodes.js";
 import { computeCurrentStreak, computeWeeklyStats, toISODate } from "../domain/streaks.js";
-import { hashPassword, signAccessToken, verifyPassword } from "../lib/auth.js";
+import {
+  SignupSchema,
+  LoginSchema,
+  CreateHabitSchema,
+  ToggleHabitActiveSchema,
+  LogCheckInSchema,
+  RemoveCheckInSchema,
+} from "./schemas.js";
+import { validateInput } from "../utils/validation.js";
+import {
+  hashPassword,
+  signAccessToken,
+  verifyPassword,
+  generateRefreshToken,
+} from "../lib/auth.js";
 import type {
   Context,
   CreateHabitArgs,
@@ -9,6 +23,8 @@ import type {
   HabitParent,
   LogCheckInArgs,
   LoginArgs,
+  LogoutArgs,
+  RefreshArgs,
   RemoveCheckInArgs,
   SignupArgs,
   ToggleHabitActiveArgs,
@@ -94,41 +110,107 @@ export const resolvers = {
 
   Mutation: {
     signup: async (_parent: unknown, args: SignupArgs, ctx: Context) => {
-      const email = args.input.email.trim().toLowerCase();
-      const { password } = args.input;
+      const input = validateInput(SignupSchema, args.input);
+      const email = input.email.trim().toLowerCase();
 
       const existingUser = await ctx.prisma.user.findUnique({
         where: { email },
       });
       if (existingUser) {
+        ctx.logger.warn({ email }, "Signup failed: email already in use");
         throw new GraphQLError("Email is already in use", {
           extensions: { code: ErrorCodes.BAD_USER_INPUT },
         });
       }
 
-      const passwordHash = await hashPassword(password);
+      const passwordHash = await hashPassword(input.password);
       const user = await ctx.prisma.user.create({
         data: { email, passwordHash },
       });
 
-      return { accessToken: signAccessToken(user.id) };
+      const token = generateRefreshToken();
+      await ctx.prisma.refreshToken.create({
+        data: {
+          userId: user.id,
+          token,
+          expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
+        },
+      });
+
+      ctx.logger.info({ userId: user.id }, "User signed up successfully");
+      return { accessToken: signAccessToken(user.id), refreshToken: token };
     },
 
     login: async (_parent: unknown, args: LoginArgs, ctx: Context) => {
-      const email = args.input.email.trim().toLowerCase();
-      const { password } = args.input;
+      const input = validateInput(LoginSchema, args.input);
+      const email = input.email.trim().toLowerCase();
 
       const user = await ctx.prisma.user.findUnique({ where: { email } });
       const isValid =
-        user !== null && (await verifyPassword(password, user.passwordHash));
+        user !== null && (await verifyPassword(input.password, user.passwordHash));
 
       if (!user || !isValid) {
+        ctx.logger.warn({ email }, "Login failed: invalid credentials");
         throw new GraphQLError("Invalid email or password", {
           extensions: { code: ErrorCodes.BAD_USER_INPUT },
         });
       }
 
-      return { accessToken: signAccessToken(user.id) };
+      const token = generateRefreshToken();
+      await ctx.prisma.refreshToken.create({
+        data: {
+          userId: user.id,
+          token,
+          expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        },
+      });
+
+      ctx.logger.info({ userId: user.id }, "User logged in successfully");
+      return { accessToken: signAccessToken(user.id), refreshToken: token };
+    },
+
+    logout: async (_parent: unknown, args: LogoutArgs, ctx: Context) => {
+      const { refreshToken } = args;
+      if (!refreshToken) return true;
+
+      const deleted = await ctx.prisma.refreshToken.deleteMany({
+        where: { token: refreshToken },
+      });
+
+      ctx.logger.info({ deleted: deleted.count }, "User logged out (token revoked)");
+      return true;
+    },
+
+    refresh: async (_parent: unknown, args: RefreshArgs, ctx: Context) => {
+      const { refreshToken } = args;
+      const record = await ctx.prisma.refreshToken.findUnique({
+        where: { token: refreshToken },
+        include: { user: true },
+      });
+
+      if (!record || record.expiresAt < new Date()) {
+        ctx.logger.warn("Refresh failed: token invalid or expired");
+        throw new GraphQLError("Invalid or expired refresh token", {
+          extensions: { code: ErrorCodes.UNAUTHENTICATED },
+        });
+      }
+
+      const newToken = generateRefreshToken();
+      
+      // Rotate token: delete old, instantiate new.
+      await ctx.prisma.$transaction([
+        ctx.prisma.refreshToken.delete({ where: { token: refreshToken } }),
+        ctx.prisma.refreshToken.create({
+          data: {
+            userId: record.userId,
+            token: newToken,
+            expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+          },
+        }),
+      ]);
+
+      ctx.logger.info({ userId: record.userId }, "Token refreshed successfully");
+      return { accessToken: signAccessToken(record.userId), refreshToken: newToken };
     },
 
     createHabit: async (
@@ -137,20 +219,19 @@ export const resolvers = {
       ctx: Context,
     ) => {
       const userId = requireAuth(ctx);
-      const title = args.input.title.trim();
-      if (!title) {
-        throw new GraphQLError("Title is required", {
-          extensions: { code: ErrorCodes.BAD_USER_INPUT },
-        });
-      }
+      const input = validateInput(CreateHabitSchema, args.input);
+      const title = input.title.trim();
 
-      return ctx.prisma.habit.create({
+      const created = await ctx.prisma.habit.create({
         data: {
           userId,
           title,
-          description: args.input.description ?? null,
+          description: input.description ?? null,
         },
       });
+      
+      ctx.logger.info({ habitId: created.id }, "Habit created");
+      return created;
     },
 
     toggleHabitActive: async (
@@ -159,20 +240,25 @@ export const resolvers = {
       ctx: Context,
     ) => {
       const userId = requireAuth(ctx);
+      const input = validateInput(ToggleHabitActiveSchema, args.input);
 
       const habit = await ctx.prisma.habit.findFirst({
-        where: { id: args.input.habitId, userId },
+        where: { id: input.habitId, userId },
       });
       if (!habit) {
+        ctx.logger.warn({ habitId: input.habitId, userId }, "Habit not found for active toggle");
         throw new GraphQLError("Habit not found", {
           extensions: { code: ErrorCodes.NOT_FOUND },
         });
       }
 
-      return ctx.prisma.habit.update({
+      const updated = await ctx.prisma.habit.update({
         where: { id: habit.id },
-        data: { isActive: args.input.isActive },
+        data: { isActive: input.isActive },
       });
+      
+      ctx.logger.info({ habitId: habit.id, isActive: input.isActive }, "Habit active state toggled");
+      return updated;
     },
 
     logCheckIn: async (
@@ -181,39 +267,44 @@ export const resolvers = {
       ctx: Context,
     ) => {
       const userId = requireAuth(ctx);
-      const date = parseUTCDate(args.input.date);
+      const input = validateInput(LogCheckInSchema, args.input);
+      const date = parseUTCDate(input.date);
 
       // Reject future dates — check-ins must be for today or the past.
-      if (args.input.date > getTodayUTC()) {
+      if (input.date > getTodayUTC()) {
+        ctx.logger.warn({ habitId: input.habitId, date: input.date }, "Attempted future check-in");
         throw new GraphQLError("Cannot log a check-in for a future date.", {
           extensions: { code: ErrorCodes.BAD_USER_INPUT },
         });
       }
 
-      // Verify ownership — avoid leaking whether habit exists for other users.
       const habit = await ctx.prisma.habit.findFirst({
-        where: { id: args.input.habitId, userId },
+        where: { id: input.habitId, userId },
         select: { id: true },
       });
       if (!habit) {
+        ctx.logger.warn({ habitId: input.habitId, userId }, "Habit not found for check-in");
         throw new GraphQLError("Habit not found", {
           extensions: { code: ErrorCodes.NOT_FOUND },
         });
       }
 
-      return ctx.prisma.habitLog.upsert({
+      const result = await ctx.prisma.habitLog.upsert({
         where: { habitId_date: { habitId: habit.id, date } },
         create: {
           habitId: habit.id,
           date,
           completed: true,
-          note: args.input.note ?? null,
+          note: input.note ?? null,
         },
         update: {
           completed: true,
-          note: args.input.note ?? null,
+          note: input.note ?? null,
         },
       });
+      
+      ctx.logger.info({ habitId: habit.id, date: input.date }, "Check-in logged");
+      return result;
     },
 
     removeCheckIn: async (
@@ -222,14 +313,15 @@ export const resolvers = {
       ctx: Context,
     ) => {
       const userId = requireAuth(ctx);
-      const date = parseUTCDate(args.input.date);
+      const input = validateInput(RemoveCheckInSchema, args.input);
+      const date = parseUTCDate(input.date);
 
-      // Verify ownership.
       const habit = await ctx.prisma.habit.findFirst({
-        where: { id: args.input.habitId, userId },
+        where: { id: input.habitId, userId },
         select: { id: true },
       });
       if (!habit) {
+        ctx.logger.warn({ habitId: input.habitId, userId }, "Habit not found for check-in removal");
         throw new GraphQLError("Habit not found", {
           extensions: { code: ErrorCodes.NOT_FOUND },
         });
@@ -239,6 +331,7 @@ export const resolvers = {
         where: { habitId: habit.id, date },
       });
 
+      ctx.logger.info({ habitId: habit.id, date: input.date }, "Check-in removed");
       return deleted.count > 0;
     },
   },
