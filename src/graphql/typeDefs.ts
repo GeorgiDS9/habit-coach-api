@@ -49,6 +49,7 @@ export const typeDefs = `#graphql
 
   type AuthPayload {
     accessToken: String!
+    refreshToken: String!
   }
 
   # -----------------------------------------------------------------------
@@ -116,6 +117,8 @@ export const typeDefs = `#graphql
   type Mutation {
     signup(input: SignupInput!): AuthPayload!
     login(input: LoginInput!): AuthPayload!
+    logout(refreshToken: String!): Boolean!
+    refresh(refreshToken: String!): AuthPayload!
     createHabit(input: CreateHabitInput!): Habit!
     toggleHabitActive(input: ToggleHabitActiveInput!): Habit!
     """ Upsert a daily check-in. Habit must belong to the authenticated user. """

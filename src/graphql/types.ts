@@ -1,8 +1,11 @@
 import { prisma } from "../lib/prisma.js";
+import type { Logger } from "pino";
 
 export type Context = {
   prisma: typeof prisma;
   userId: string | null;
+  logger: Logger;
+  reqId: string;
 };
 
 export type SignupArgs = {
@@ -17,6 +20,14 @@ export type LoginArgs = {
     email: string;
     password: string;
   };
+};
+
+export type RefreshArgs = {
+  refreshToken: string;
+};
+
+export type LogoutArgs = {
+  refreshToken: string;
 };
 
 export type CreateHabitArgs = {
