@@ -71,7 +71,19 @@ async function gql<T>(
   const request = variables !== undefined ? { query, variables } : { query };
   const result = await server.executeOperation<T>(
     request,
-    { contextValue: { prisma: db, userId: userId ?? null } },
+    {
+      contextValue: {
+        prisma: db,
+        userId: userId ?? null,
+        logger: {
+          info: () => {},
+          warn: () => {},
+          error: () => {},
+          child: () => ({ info: () => {}, warn: () => {}, error: () => {} }),
+        } as unknown as import("pino").Logger,
+        reqId: "test-req-id",
+      },
+    },
   );
 
   if (result.body.kind !== "single") {
@@ -87,13 +99,25 @@ async function gql<T>(
 
 const SIGNUP = `
   mutation Signup($input: SignupInput!) {
-    signup(input: $input) { accessToken }
+    signup(input: $input) { accessToken refreshToken }
   }
 `;
 
 const LOGIN = `
   mutation Login($input: LoginInput!) {
-    login(input: $input) { accessToken }
+    login(input: $input) { accessToken refreshToken }
+  }
+`;
+
+const REFRESH = `
+  mutation Refresh($refreshToken: String!) {
+    refresh(refreshToken: $refreshToken) { accessToken refreshToken }
+  }
+`;
+
+const LOGOUT = `
+  mutation Logout($refreshToken: String!) {
+    logout(refreshToken: $refreshToken)
   }
 `;
 
@@ -174,11 +198,12 @@ describe("Auth", () => {
     await gql(SIGNUP, {
       input: { email: "bob@example.com", password: "secret" },
     });
-    const res = await gql<{ login: { accessToken: string } }>(LOGIN, {
+    const res = await gql<{ login: { accessToken: string; refreshToken: string } }>(LOGIN, {
       input: { email: "bob@example.com", password: "secret" },
     });
     expect(res.errors).toBeUndefined();
     expect(typeof res.data?.login.accessToken).toBe("string");
+    expect(typeof res.data?.login.refreshToken).toBe("string");
   });
 
   it("login rejects wrong password", async () => {
@@ -189,6 +214,38 @@ describe("Auth", () => {
       input: { email: "carol@example.com", password: "wrong" },
     });
     expect(res.errors?.[0]?.extensions?.code).toBe("BAD_USER_INPUT");
+  });
+
+  it("refresh issues a new token pair and revokes the old one", async () => {
+    const signupRes = await gql<{ signup: { accessToken: string; refreshToken: string } }>(SIGNUP, {
+      input: { email: "refresh@example.com", password: "password123" },
+    });
+    const oldRefreshToken = signupRes.data!.signup.refreshToken;
+
+    const refreshRes = await gql<{ refresh: { accessToken: string; refreshToken: string } }>(REFRESH, {
+      refreshToken: oldRefreshToken,
+    });
+    expect(refreshRes.errors).toBeUndefined();
+    expect(typeof refreshRes.data?.refresh.accessToken).toBe("string");
+    expect(refreshRes.data?.refresh.refreshToken).not.toBe(oldRefreshToken);
+
+    // Old token should be revoked
+    const failedRefreshRes = await gql(REFRESH, { refreshToken: oldRefreshToken });
+    expect(failedRefreshRes.errors?.[0]?.extensions?.code).toBe("UNAUTHENTICATED");
+  });
+
+  it("logout revokes the refresh token", async () => {
+    const signupRes = await gql<{ signup: { accessToken: string; refreshToken: string } }>(SIGNUP, {
+      input: { email: "logout@example.com", password: "password123" },
+    });
+    const refreshToken = signupRes.data!.signup.refreshToken;
+
+    const logoutRes = await gql<{ logout: boolean }>(LOGOUT, { refreshToken });
+    expect(logoutRes.errors).toBeUndefined();
+    expect(logoutRes.data?.logout).toBe(true);
+
+    const failedRefreshRes = await gql(REFRESH, { refreshToken });
+    expect(failedRefreshRes.errors?.[0]?.extensions?.code).toBe("UNAUTHENTICATED");
   });
 });
 
