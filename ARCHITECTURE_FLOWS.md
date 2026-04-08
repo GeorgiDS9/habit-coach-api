@@ -38,6 +38,50 @@ flowchart TD
 
 ---
 
+## 1.1 Deployment topology (Vercel + Render + Neon)
+
+```mermaid
+flowchart LR
+    User["User browser"]
+
+    subgraph FE_HOST ["Vercel"]
+      FE["habit-coach-web\nNext.js app"]
+    end
+
+    subgraph BE_HOST ["Render"]
+      BE["habit-coach-api\nApollo Server (/graphql)"]
+    end
+
+    subgraph DB_HOST ["Neon"]
+      DB["PostgreSQL database"]
+    end
+
+    User -->|HTTPS| FE
+    FE -->|GraphQL over HTTPS\nNEXT_PUBLIC_GRAPHQL_URL| BE
+    BE -->|Prisma| DB
+```
+
+**Why this helps:**
+
+- Other diagrams show runtime/data flow, but this one shows **hosting boundaries** and env-var wiring, which answers “how do FE and BE communicate when deployed separately?”.
+
+**How services discover each other**
+
+- Frontend uses `NEXT_PUBLIC_GRAPHQL_URL` to call the backend GraphQL endpoint.
+- Backend uses `DATABASE_URL` to connect to Neon.
+- Browser sends `Authorization: Bearer <accessToken>` to backend; backend validates the token.
+
+**Deployment env mapping**
+
+- `habit-coach-web` (Vercel): `NEXT_PUBLIC_GRAPHQL_URL=https://<render-service>.onrender.com/graphql`
+- `habit-coach-api` (Render): `DATABASE_URL=<neon-url>`, `JWT_SECRET=<secret>` (optional: `NODE_ENV=production`)
+
+**Cross-origin note**
+
+- FE and BE run on different domains, so backend CORS must allow your Vercel origin(s).
+
+---
+
 ## 2. Auth flow
 
 ```mermaid
