@@ -23,6 +23,11 @@ Schema / operation changes here should be reflected in **`habit-coach-web`** (op
 
 **Related repo:** [habit-coach-web](https://github.com/GeorgiDS9/habit-coach-web)
 
+## Types
+- Avoid `any`. Use precise TypeScript types for inputs, outputs, and function boundaries.
+- Prefer `unknown` over `any` when the shape is truly dynamic, then narrow with type guards or schema validation (e.g. Zod).
+- If `any` is unavoidable, keep it local, add a short justification comment, and do not leak it across module boundaries.
+
 ## Testing
 
 Run before every push or merge — CI must not be the first to catch failures.
