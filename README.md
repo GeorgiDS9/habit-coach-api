@@ -11,6 +11,14 @@ Copy `.env.example` to `.env` and fill in the values.
 | `DATABASE_URL` | PostgreSQL connection string (Neon, local Docker, etc.) |
 | `TEST_DATABASE_URL` | Connection string for integration tests. Falls back to `DATABASE_URL`. |
 | `JWT_SECRET` | Secret for signing HS256 JWT access tokens (`openssl rand -base64 48`). |
+| `LOG_LEVEL` | Pino logger level (e.g. `info`, `warn`, `fatal`). Default is `info`. |
+
+## Auth Flow
+
+1. **Signup/Login**: The API returns an `accessToken` (15m expiry) and a `refreshToken` (30 day expiry).
+2. **Accessing protected resources**: Pass `Authorization: Bearer <accessToken>`.
+3. **Refreshing**: When the access token expires, call the `refresh(refreshToken: ...)` mutation. A fresh valid access & refresh token pair will be returned.
+4. **Logout**: Call `logout(refreshToken: ...)` to revoke the session in the DB.
 
 ## Running locally
 
