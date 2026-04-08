@@ -29,13 +29,23 @@ function getUserIdFromAuthHeader(
 }
 
 async function bootstrap() {
+  // Verify DB connectivity before accepting traffic.
+  await prisma.$queryRaw`SELECT 1`;
+  logger.info("Database connection verified");
+
   const server = new ApolloServer<Context>({
     typeDefs,
     resolvers,
   });
 
+  const corsOrigin = process.env["CORS_ORIGIN"] ?? "http://localhost:3000";
+
   const { url } = await startStandaloneServer(server, {
     listen: { port: APP_PORT },
+    cors: {
+      origin: corsOrigin,
+      credentials: true,
+    },
     context: async ({ req }) => {
       const parentReqId = req.headers["x-correlation-id"] as string | undefined;
       const reqId = parentReqId || generateCorrelationId();
