@@ -42,11 +42,11 @@ async function bootstrap() {
 
   const { url } = await startStandaloneServer(server, {
     listen: { port: APP_PORT },
-    cors: {
-      origin: corsOrigin,
-      credentials: true,
-    },
-    context: async ({ req }) => {
+    context: async ({ req, res }) => {
+      // startStandaloneServer's internal cors() allows all origins for OPTIONS.
+      // Set the origin explicitly on actual responses to restrict the browser.
+      res.setHeader("Access-Control-Allow-Origin", corsOrigin);
+      res.setHeader("Vary", "Origin");
       const parentReqId = req.headers["x-correlation-id"] as string | undefined;
       const reqId = parentReqId || generateCorrelationId();
       const childLogger = logger.child({ reqId });

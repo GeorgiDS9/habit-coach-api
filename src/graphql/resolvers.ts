@@ -289,17 +289,22 @@ export const resolvers = {
         });
       }
 
+      // Strip HTML tags so stored notes are always plaintext.
+      const sanitizedNote = input.note != null
+        ? input.note.replace(/<[^>]*>/g, "").trim() || null
+        : null;
+
       const result = await ctx.prisma.habitLog.upsert({
         where: { habitId_date: { habitId: habit.id, date } },
         create: {
           habitId: habit.id,
           date,
           completed: true,
-          note: input.note ?? null,
+          note: sanitizedNote,
         },
         update: {
           completed: true,
-          note: input.note ?? null,
+          note: sanitizedNote,
         },
       });
       
