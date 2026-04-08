@@ -1,5 +1,6 @@
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import crypto from "node:crypto";
 
 const SALT_ROUNDS = 10;
 
@@ -43,4 +44,8 @@ export function verifyAccessToken(token: string): AccessTokenPayload {
   }
 
   return decoded as AccessTokenPayload;
+}
+
+export function generateRefreshToken(): string {
+  return crypto.randomBytes(32).toString("hex");
 }
